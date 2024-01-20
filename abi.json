@@ -16,7 +16,7 @@
             },{
                 "name": "mint",
                 "type": "function",
-                "inputs": [{"name": "owner_ptr", "type": "u8"},{"name": "owner_len", "type": "usize"},{"name": "ipfs_hash_ptr", "type": "u8"},{"name": "ipfs_hash_len", "type": "usize"}],
+                "inputs": [{"name": "owner_string", "type": "String"},{"name": "ipfs_string", "type": "String"}],
                 "outputs": [{"name": "output", "type": "u32"}]
             },{
                 "name": "get_token_or_default",

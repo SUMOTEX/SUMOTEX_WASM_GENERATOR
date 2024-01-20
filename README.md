@@ -13,4 +13,8 @@ COPYRIGHT AND OWN BY SUMOTEX HOLDING
 -- add_derive_macro
 1. Change the target towards the file
 2. Go to erc20_wasm and edit the cargo.toml towards the right target
+
+-- IF failed RUN cargo new train
+-- rustup target add wasm32-wasi
+-- cargo build --target wasm32-wasi
 3. Check if #[generate_abi] exist and run cargo build --target wasm32-wasi --release

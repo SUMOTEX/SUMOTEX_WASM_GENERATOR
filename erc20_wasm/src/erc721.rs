@@ -82,11 +82,14 @@ impl ERC721Token {
 
     #[no_mangle]
     pub extern "C" fn mint(
-        owner_ptr: *const u8,
-        owner_len: usize,
-        ipfs_hash_ptr: *const u8,
-        ipfs_hash_len: usize,
+        owner_string:String,
+        ipfs_string:  String,
     ) -> u32 {
+        let owner_ptr = owner_string.as_ptr();
+        let owner_len = owner_string.len();
+    
+        let ipfs_hash_ptr = ipfs_string.as_ptr();
+        let ipfs_hash_len = ipfs_string.len();
         let token = match unsafe { GLOBAL_STATE.token_ptr } {
             Some(ptr) => unsafe { &mut *ptr },
             None => {
