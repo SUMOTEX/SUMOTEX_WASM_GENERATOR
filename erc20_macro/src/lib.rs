@@ -4,7 +4,6 @@ use syn::Pat;
 use syn::FnArg;
 use quote::quote;
 // use syn::{Item,parse_macro_input};
-use quote::ToTokens;
 use syn::{parse_macro_input, ItemImpl, ImplItem};
 use std::fs::File;
 use std::io::prelude::*;
