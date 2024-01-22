@@ -38,12 +38,12 @@ fn compile_and_serve_erc721(req: CompileRequest) -> Result<(Vec<u8>,String), Str
 
     if output.status.success() {
         let wasm_file_name = "sample721.wasm"; // Replace with the actual file name
-        let wasm_file_path = "/Users/leowyennhan/Desktop/SUMOTEX_WASM_GENERATOR/target/wasm32-wasi/release/sample721.wasm";   
+        let wasm_file_path = "/home/ubuntu/SUMOTEX_WASM_GENERATOR/target/wasm32-wasi/release/sample721.wasm";   
         let wasm_data = fs::read(&wasm_file_path)
             .map_err(|e| format!("Error reading WASM file: {}", e))?;
 
         // Read or generate the ABI
-        let abi_file_path = "/Users/leowyennhan/Desktop/SUMOTEX_WASM_GENERATOR/abi.json";
+        let abi_file_path = "/home/ubuntu/SUMOTEX_WASM_GENERATOR/abi.json";
         let abi_data = fs::read_to_string(&abi_file_path)
             .map_err(|e| format!("Error reading ABI file: {}", e))?;
 
