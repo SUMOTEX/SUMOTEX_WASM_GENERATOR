@@ -5,7 +5,7 @@ use std::fs;
 use std::thread;
 use serde_json::json;
 use serde_json::Value;
-use tiny_http::{Server, Response};
+use tiny_http::{Server,Header, Response};
 
 #[derive(Deserialize)]
 struct CompileRequest {
@@ -54,7 +54,6 @@ fn compile_and_serve_erc721(req: CompileRequest) -> Result<(Vec<u8>,String), Str
         Err(format!("Cargo build failed: {}", error_message))
     }
 }
-
 fn handle_request(mut request: tiny_http::Request) {
     let mut content = String::new();
     if let Err(e) = request.as_reader().read_to_string(&mut content) {
@@ -62,37 +61,48 @@ fn handle_request(mut request: tiny_http::Request) {
         return;
     }
 
-    if let Ok(json_value) = serde_json::from_str::<Value>(&content) {
+    let response = if let Ok(json_value) = serde_json::from_str::<Value>(&content) {
         if let Some(source_code) = json_value["source_code"].as_str() {
-            let compile_result = compile_and_serve_erc721(CompileRequest {
-                source_code: source_code.to_string(),
-            });
-
-            match compile_result {
+            match compile_and_serve_erc721(CompileRequest { source_code: source_code.to_string() }) {
                 Ok((wasm_data, abi_data)) => {
-                    // Create a JSON object to send as response
                     let response_obj = json!({
-                        "wasm": base64::encode(wasm_data), // Encode WASM data as Base64
+                        "wasm": base64::encode(wasm_data),
                         "abi": abi_data,
                     });
-
-                    // Serialize JSON object to string
                     if let Ok(response_json) = serde_json::to_string(&response_obj) {
-                        let response = Response::from_string(response_json);
-                        let _ = request.respond(response);
+                        let mut response = Response::from_string(response_json);
+                        for header in cors_headers() {
+                            response.add_header(header);
+                        }
+                        response
                     } else {
-                        let error_response = Response::from_string("Failed to serialize response").with_status_code(500);
-                        let _ = request.respond(error_response);
+                        Response::from_string("Failed to serialize response").with_status_code(500)
                     }
                 },
                 Err(err) => {
-                    let response = Response::from_string(err).with_status_code(500);
-                    let _ = request.respond(response);
+                    Response::from_string(err).with_status_code(500)
                 }
             }
+        } else {
+            Response::from_string("Invalid request").with_status_code(400)
         }
-    }
+    } else {
+        Response::from_string("Failed to parse JSON").with_status_code(400)
+    };
+
+    let _ = request.respond(response);
 }
+
+
+fn cors_headers() -> Vec<Header> {
+    vec![
+        Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap(),
+        Header::from_bytes("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS").unwrap(),
+        Header::from_bytes("Access-Control-Allow-Headers", "Content-Type, Authorization").unwrap(),
+        Header::from_bytes("Access-Control-Allow-Credentials", "true").unwrap(),
+    ]
+}
+
 
 fn main() {
     let server = Server::http("0.0.0.0:8000").unwrap();
@@ -100,9 +110,19 @@ fn main() {
 
     for request in server.incoming_requests() {
         let request = request; // request is already of type tiny_http::Request
-
         thread::spawn(move || {
+            // Check if it's a preflight OPTIONS request
+            if request.method() == &tiny_http::Method::Options {
+                let mut response = Response::empty(204);
+                for header in cors_headers() {
+                    response.add_header(header);
+                }
+                let _ = request.respond(response);
+                return;
+            }
             handle_request(request);
+            // Handle other requests
+            // ...
         });
     }
 }
