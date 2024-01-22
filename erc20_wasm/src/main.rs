@@ -95,8 +95,8 @@ fn handle_request(mut request: tiny_http::Request) {
 }
 
 fn main() {
-    let server = Server::http("0.0.0.0:8080").unwrap();
-    println!("Server listening on port 8080...");
+    let server = Server::http("0.0.0.0:80").unwrap();
+    println!("Server listening on port 80...");
 
     for request in server.incoming_requests() {
         let request = request; // request is already of type tiny_http::Request
