@@ -5,7 +5,7 @@ edition = "2021"
 
 [lib]
 name = "sample721"
-path = "src/lib.rs"
+path = "src/test.rs"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]

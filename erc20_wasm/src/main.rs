@@ -23,7 +23,7 @@ fn compile_and_serve_erc721(req: CompileRequest) -> Result<(Vec<u8>,String), Str
             return Err(format!("Error creating src directory: {}", e));
         }
     }
-    let source_file_path = src_dir.join("lib.rs");
+    let source_file_path = src_dir.join("test.rs");
     if let Err(e) = fs::write(&source_file_path, source_code) {
         return Err(format!("Error writing to source file: {}", e));
     }
