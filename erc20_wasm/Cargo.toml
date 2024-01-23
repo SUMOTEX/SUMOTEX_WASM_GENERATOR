@@ -5,7 +5,7 @@ edition = "2021"
 
 [lib]
 name = "sample721"
-path = "src/erc721.rs"
+path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
