@@ -1,13 +1,12 @@
-extern crate proc_macro;
-use syn::Pat;
-use syn::FnArg;
-use proc_macro::TokenStream;
-use quote::quote;
-// use syn::{Item,parse_macro_input};
-use syn::{parse_macro_input, ItemImpl, ImplItem};
-use std::fs::File;
-use std::io::prelude::*;
-
+// extern crate proc_macro;
+// use syn::Pat;
+// use syn::FnArg;
+// use proc_macro::TokenStream;
+// use quote::quote;
+// // use syn::{Item,parse_macro_input};
+// use syn::{parse_macro_input, ItemImpl, ImplItem};
+// use std::fs::File;
+// use std::io::prelude::*;
 
 // #[proc_macro]
 // pub fn generate_erc_abi(input: TokenStream) -> TokenStream {

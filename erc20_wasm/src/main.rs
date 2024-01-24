@@ -103,7 +103,6 @@ fn cors_headers() -> Vec<Header> {
     ]
 }
 
-
 fn main() {
     let server = Server::http("0.0.0.0:8000").unwrap();
     println!("Server listening on port 8000...");
