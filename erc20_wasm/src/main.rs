@@ -4,14 +4,82 @@ use std::path::Path;
 use std::fs;
 use std::thread;
 use serde_json::json;
+use lettre_email::Mailbox; // Make sure to import Mailbox
 use serde_json::Value;
 use tiny_http::{Server,Header, Response};
+use lettre::{SmtpClient, Transport};
+use lettre::smtp::authentication::Credentials;
+use lettre_email::EmailBuilder;
+use native_tls::{TlsConnector, Protocol};
 
 #[derive(Deserialize)]
 struct CompileRequest {
     source_code: String,
 }
+#[derive(Deserialize)]
+struct EmailRequest {
+    recipient: String,
+    subject: String,
+    body: String,
+}
 
+
+pub fn send_email(req: EmailRequest) -> Result<(), String> {
+    println!("Email calling...");
+    let recipient = &req.recipient;
+    let subject = &req.subject;
+    let body = &req.body;
+
+    let email = EmailBuilder::new()
+        .to(recipient.parse::<Mailbox>().map_err(|_| "Invalid email format".to_owned())?)
+        .from("hello@sumotex.co")
+        .subject(subject)
+        .text(body)
+        .build()
+        .map_err(|e| format!("Error building email: {}", e))?;
+
+    println!("Email built, setting up SMTP client...");
+
+    let creds = Credentials::new(
+        "hello@sumotex.co".to_string(), // Your Gmail
+        "uhuzkunzdiysackg".to_string() // Your Gmail App Password or password
+    );
+
+    let tls = match TlsConnector::builder()
+        .min_protocol_version(Some(Protocol::Tlsv12))
+        .build() {
+            Ok(tls) => tls,
+            Err(e) => {
+                println!("Error creating TLS connector: {}", e);
+                return Err(e.to_string());
+            }
+    };
+
+    let mailer = match SmtpClient::new(
+        ("smtp.gmail.com", 587),
+        lettre::ClientSecurity::Required(lettre::ClientTlsParameters::new("smtp.gmail.com".to_string(), tls))
+    ) {
+        Ok(client) => client.credentials(creds),
+        Err(e) => {
+            println!("Error creating SMTP client: {}", e);
+            return Err(e.to_string());
+        }
+    };
+
+    let mut mailer =  mailer.transport();
+
+    println!("SMTP client set up, sending email...");
+    match mailer.send(email.into()) {
+        Ok(_) => {
+            println!("Email sent successfully.");
+            Ok(())
+        },
+        Err(e) => {
+            println!("Could not send email: {:?}", e);
+            Err(format!("Could not send email: {:?}", e))
+        }
+    }
+}
 fn compile_and_serve_erc721(req: CompileRequest) -> Result<(Vec<u8>,String), String> {
     let source_code = &req.source_code;
     println!("{:?}",source_code);
@@ -54,6 +122,7 @@ fn compile_and_serve_erc721(req: CompileRequest) -> Result<(Vec<u8>,String), Str
         Err(format!("Cargo build failed: {}", error_message))
     }
 }
+
 fn handle_request(mut request: tiny_http::Request) {
     let mut content = String::new();
     if let Err(e) = request.as_reader().read_to_string(&mut content) {
@@ -61,33 +130,42 @@ fn handle_request(mut request: tiny_http::Request) {
         return;
     }
 
-    let response = if let Ok(json_value) = serde_json::from_str::<Value>(&content) {
-        if let Some(source_code) = json_value["source_code"].as_str() {
-            match compile_and_serve_erc721(CompileRequest { source_code: source_code.to_string() }) {
-                Ok((wasm_data, abi_data)) => {
-                    let response_obj = json!({
-                        "wasm": base64::encode(wasm_data),
-                        "abi": abi_data,
-                    });
-                    if let Ok(response_json) = serde_json::to_string(&response_obj) {
-                        let mut response = Response::from_string(response_json);
-                        for header in cors_headers() {
-                            response.add_header(header);
-                        }
-                        response
-                    } else {
-                        Response::from_string("Failed to serialize response").with_status_code(500)
-                    }
-                },
-                Err(err) => {
-                    Response::from_string(err).with_status_code(500)
+    let response = match request.url() {
+        "/send_email" => {
+            if let Ok(email_request) = serde_json::from_str::<EmailRequest>(&content) {
+                match send_email(email_request) {
+                    Ok(_) => Response::from_string("Email sent successfully").with_status_code(200),
+                    Err(err) => Response::from_string(err).with_status_code(500),
                 }
+            } else {
+                Response::from_string("Invalid email request").with_status_code(400)
             }
-        } else {
-            Response::from_string("Invalid request").with_status_code(400)
-        }
-    } else {
-        Response::from_string("Failed to parse JSON").with_status_code(400)
+        },
+        "/compile_and_serve" => {
+            if let Ok(compile_request) = serde_json::from_str::<CompileRequest>(&content) {
+                match compile_and_serve_erc721(compile_request) {
+                    Ok((wasm_data, abi_data)) => {
+                        let response_obj = json!({
+                            "wasm": base64::encode(wasm_data),
+                            "abi": abi_data,
+                        });
+                        if let Ok(response_json) = serde_json::to_string(&response_obj) {
+                            let mut response = Response::from_string(response_json);
+                            for header in cors_headers() {
+                                response.add_header(header);
+                            }
+                            response
+                        } else {
+                            Response::from_string("Failed to serialize response").with_status_code(500)
+                        }
+                    },
+                    Err(err) => Response::from_string(err).with_status_code(500),
+                }
+            } else {
+                Response::from_string("Invalid compile request").with_status_code(400)
+            }
+        },
+        _ => Response::from_string("Not found").with_status_code(404),
     };
 
     let _ = request.respond(response);

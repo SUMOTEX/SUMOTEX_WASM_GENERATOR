@@ -12,6 +12,7 @@ use std::ffi::{CString, CStr};
 pub struct ERC721Token {
     pub name: String,
     pub symbol: String,
+    pub owner_id_to_token:Vec<String>,
     pub owner_of: Vec<String>,        // Vector to store owner addresses
     pub token_to_ipfs: Vec<String>,    // Vector to store IPFS hashes
     //pub owner_of: HashMap<u64, String>,  // tokenId -> owner address
@@ -22,6 +23,7 @@ pub struct ERC721Token {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct TokenDetails {
     pub owner: String,
+    pub owner_id:String,
     pub ipfs_link: String,
 }
 
@@ -82,14 +84,13 @@ impl ERC721Token {
 
     #[no_mangle]
     pub extern "C" fn mint(
-        owner_string:String,
-        ipfs_string:  String,
+        owner_ptr: *const u8,
+        owner_len: usize,
+        owner_id_ptr: *const u8,
+        owner_id_len: usize,
+        ipfs_hash_ptr: *const u8,
+        ipfs_hash_len: usize,
     ) -> u32 {
-        let owner_ptr = owner_string.as_ptr();
-        let owner_len = owner_string.len();
-    
-        let ipfs_hash_ptr = ipfs_string.as_ptr();
-        let ipfs_hash_len = ipfs_string.len();
         let token = match unsafe { GLOBAL_STATE.token_ptr } {
             Some(ptr) => unsafe { &mut *ptr },
             None => {
@@ -107,9 +108,13 @@ impl ERC721Token {
         }
         let ipfs_hash_slice = unsafe { std::slice::from_raw_parts(ipfs_hash_ptr, ipfs_hash_len) };
         let ipfs_hash_str = String::from_utf8_lossy(ipfs_hash_slice).to_string();
+
+        let owner_id_slice = unsafe { std::slice::from_raw_parts(owner_id_ptr, owner_id_len) };
+        let owner_id_str = String::from_utf8_lossy(owner_id_slice).to_string();
     
         let token_id = token.token_id;
-        token.owner_of.push(owner_str); // Add the owner to the vector
+        token.owner_id_to_token.push(owner_id_hash_str)
+        token.owner_of.push(owner_id_str); // Add the owner to the vector
         token.token_to_ipfs.push(ipfs_hash_str); // Add the IPFS hash to the vector
         token.token_id += 1;
         
@@ -130,6 +135,7 @@ impl ERC721Token {
                 ERC721Token {
                     name: String::new(),
                     symbol: String::new(),
+                    owner_id: Vec::new(),
                     owner_of: Vec::new(),
                     token_to_ipfs: Vec::new(),
                     token_id: 0,
@@ -207,7 +213,38 @@ impl ERC721Token {
             std::ptr::null() // Token not initialized.
         }
     }
+    #[no_mangle]
+    pub extern "C" fn get_owner_id_len(token_id: i32) -> i32 {
+        let token_ptr = unsafe { GLOBAL_STATE.token_ptr };
+        if let Some(ptr) = token_ptr {
+            let token = unsafe { &*ptr };
 
+            if token_id >= 0 && (token_id as usize) < token.owner_id_to_token.len() {
+                let owner_id_hash = &token.owner_id_to_token[token_id as usize];
+                owner_id_hash.len() as i32
+            } else {
+                -1 // Token ID out of bounds or not found.
+            }
+        } else {
+            -1 // Token not initialized.
+        }
+    }
+    #[no_mangle]
+    pub extern "C" fn get_owner_id_ptr(token_id: i32) -> *const i8 {
+        let token_ptr = unsafe { GLOBAL_STATE.token_ptr };
+        if let Some(ptr) = token_ptr {
+            let token = unsafe { &*ptr };
+
+            if token_id >= 0 && (token_id as usize) < token.owner_id_to_token.len() {
+                let owner_id_hash = &token.owner_id_to_token[token_id as usize];
+                owner_id_hash.as_ptr() as *const i8
+            } else {
+                std::ptr::null() // Token ID out of bounds or not found.
+            }
+        } else {
+            std::ptr::null() // Token not initialized.
+        }
+    }
     pub fn encode_token_details(details: &TokenDetails) -> Vec<u8> {
         let encoded_bytes = serialize(details).expect("Encoding failed");
         encoded_bytes
@@ -259,8 +296,6 @@ impl ERC721Token {
         unsafe {
             std::ptr::copy_nonoverlapping(bytes.as_ptr(), buffer, bytes.len());
         }
-    
-        println!("Read Name: Successfully read the name into the buffer");
     
         bytes.len() as isize
     }
