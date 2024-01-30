@@ -4,13 +4,8 @@ use std::path::Path;
 use std::fs;
 use std::thread;
 use serde_json::json;
-use lettre_email::Mailbox; // Make sure to import Mailbox
 use serde_json::Value;
 use tiny_http::{Server,Header, Response};
-use lettre::{SmtpClient, Transport};
-use lettre::smtp::authentication::Credentials;
-use lettre_email::EmailBuilder;
-use native_tls::{TlsConnector, Protocol};
 
 #[derive(Deserialize)]
 struct CompileRequest {
@@ -24,62 +19,62 @@ struct EmailRequest {
 }
 
 
-pub fn send_email(req: EmailRequest) -> Result<(), String> {
-    println!("Email calling...");
-    let recipient = &req.recipient;
-    let subject = &req.subject;
-    let body = &req.body;
+// pub fn send_email(req: EmailRequest) -> Result<(), String> {
+//     println!("Email calling...");
+//     let recipient = &req.recipient;
+//     let subject = &req.subject;
+//     let body = &req.body;
 
-    let email = EmailBuilder::new()
-        .to(recipient.parse::<Mailbox>().map_err(|_| "Invalid email format".to_owned())?)
-        .from("hello@sumotex.co")
-        .subject(subject)
-        .text(body)
-        .build()
-        .map_err(|e| format!("Error building email: {}", e))?;
+//     let email = EmailBuilder::new()
+//         .to(recipient.parse::<Mailbox>().map_err(|_| "Invalid email format".to_owned())?)
+//         .from("hello@sumotex.co")
+//         .subject(subject)
+//         .text(body)
+//         .build()
+//         .map_err(|e| format!("Error building email: {}", e))?;
 
-    println!("Email built, setting up SMTP client...");
+//     println!("Email built, setting up SMTP client...");
 
-    let creds = Credentials::new(
-        "hello@sumotex.co".to_string(), // Your Gmail
-        "uhuzkunzdiysackg".to_string() // Your Gmail App Password or password
-    );
+//     let creds = Credentials::new(
+//         "hello@sumotex.co".to_string(), // Your Gmail
+//         "uhuzkunzdiysackg".to_string() // Your Gmail App Password or password
+//     );
 
-    let tls = match TlsConnector::builder()
-        .min_protocol_version(Some(Protocol::Tlsv12))
-        .build() {
-            Ok(tls) => tls,
-            Err(e) => {
-                println!("Error creating TLS connector: {}", e);
-                return Err(e.to_string());
-            }
-    };
+//     let tls = match TlsConnector::builder()
+//         .min_protocol_version(Some(Protocol::Tlsv12))
+//         .build() {
+//             Ok(tls) => tls,
+//             Err(e) => {
+//                 println!("Error creating TLS connector: {}", e);
+//                 return Err(e.to_string());
+//             }
+//     };
 
-    let mailer = match SmtpClient::new(
-        ("smtp.gmail.com", 587),
-        lettre::ClientSecurity::Required(lettre::ClientTlsParameters::new("smtp.gmail.com".to_string(), tls))
-    ) {
-        Ok(client) => client.credentials(creds),
-        Err(e) => {
-            println!("Error creating SMTP client: {}", e);
-            return Err(e.to_string());
-        }
-    };
+//     let mailer = match SmtpClient::new(
+//         ("smtp.gmail.com", 587),
+//         lettre::ClientSecurity::Required(lettre::ClientTlsParameters::new("smtp.gmail.com".to_string(), tls))
+//     ) {
+//         Ok(client) => client.credentials(creds),
+//         Err(e) => {
+//             println!("Error creating SMTP client: {}", e);
+//             return Err(e.to_string());
+//         }
+//     };
 
-    let mut mailer =  mailer.transport();
+//     let mut mailer =  mailer.transport();
 
-    println!("SMTP client set up, sending email...");
-    match mailer.send(email.into()) {
-        Ok(_) => {
-            println!("Email sent successfully.");
-            Ok(())
-        },
-        Err(e) => {
-            println!("Could not send email: {:?}", e);
-            Err(format!("Could not send email: {:?}", e))
-        }
-    }
-}
+//     println!("SMTP client set up, sending email...");
+//     match mailer.send(email.into()) {
+//         Ok(_) => {
+//             println!("Email sent successfully.");
+//             Ok(())
+//         },
+//         Err(e) => {
+//             println!("Could not send email: {:?}", e);
+//             Err(format!("Could not send email: {:?}", e))
+//         }
+//     }
+// }
 fn compile_and_serve_erc721(req: CompileRequest) -> Result<(Vec<u8>,String), String> {
     let source_code = &req.source_code;
     println!("{:?}",source_code);
@@ -131,16 +126,16 @@ fn handle_request(mut request: tiny_http::Request) {
     }
 
     let response = match request.url() {
-        "/send_email" => {
-            if let Ok(email_request) = serde_json::from_str::<EmailRequest>(&content) {
-                match send_email(email_request) {
-                    Ok(_) => Response::from_string("Email sent successfully").with_status_code(200),
-                    Err(err) => Response::from_string(err).with_status_code(500),
-                }
-            } else {
-                Response::from_string("Invalid email request").with_status_code(400)
-            }
-        },
+        // "/send_email" => {
+        //     if let Ok(email_request) = serde_json::from_str::<EmailRequest>(&content) {
+        //         match send_email(email_request) {
+        //             Ok(_) => Response::from_string("Email sent successfully").with_status_code(200),
+        //             Err(err) => Response::from_string(err).with_status_code(500),
+        //         }
+        //     } else {
+        //         Response::from_string("Invalid email request").with_status_code(400)
+        //     }
+        // },
         "/compile_and_serve" => {
             if let Ok(compile_request) = serde_json::from_str::<CompileRequest>(&content) {
                 match compile_and_serve_erc721(compile_request) {
