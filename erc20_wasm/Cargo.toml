@@ -21,3 +21,4 @@ base64 = "0.13"
 lettre = "0.9"
 lettre_email = "0.9"
 native-tls = "0.2"
+openssl = { version = "0.10", features = ["vendored"] }
