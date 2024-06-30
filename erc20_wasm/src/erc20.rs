@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 use bincode::{serialize_into, deserialize_from};
 use erc20_macro::generate_abi;
-use add_derive_macro::add_derive;
+use std::io::Cursor;
 use serde::{Serialize, Deserialize};
+use std::ffi::{CString, CStr};
 
 #[derive(Serialize, Deserialize)]
 pub struct ERC20Token {
@@ -19,7 +20,6 @@ fn extract_string_from_wasm_memory(ptr: *mut u8, len: usize) -> String {
     String::from_utf8_lossy(slice).to_string()
 }
 
-#[generate_abi]
 impl ERC20Token {
     fn deserialize_from_memory(buffer: *const u8, len: usize) -> Result<ERC20Token, Box<dyn std::error::Error>> {
         let reader = unsafe { Cursor::new(std::slice::from_raw_parts(buffer, len)) };
@@ -52,8 +52,8 @@ impl ERC20Token {
         balances.insert("Contract_Owner".to_string(), initial_supply);
     
         let token = ERC20Token {
-            name: name,
-            symbol: symbol,
+            name,
+            symbol,
             decimals,
             total_supply: initial_supply,
             balances,
@@ -77,6 +77,7 @@ impl ERC20Token {
         let token = Self::deserialize_from_memory(buffer, len).expect("Failed to deserialize");
         Box::into_raw(Box::new(token))
     }
+
     #[no_mangle]
     pub extern "C" fn destroy(token_ptr: *mut ERC20Token) {
         // Deallocate the memory when you're done with the ERC20Token instance
@@ -84,94 +85,102 @@ impl ERC20Token {
             Box::from_raw(token_ptr);
         }
     }
+
     #[no_mangle]
-    pub extern "C" fn balance_of(self, owner: String) -> u64 {
-        *self.balances.get(&owner).unwrap_or(&0)
+    pub extern "C" fn balance_of(&self, owner: *const i8) -> u64 {
+        let owner_str = unsafe { CStr::from_ptr(owner) }.to_str().unwrap();
+        *self.balances.get(owner_str).unwrap_or(&0)
     }
 
-
     #[no_mangle]
-    pub extern "C" fn transfer(self, to: String, value: u64, from: String) -> Result<ERC20Token, &'static str> {
-        let sender_balance = self.balance_of(&from);
+    pub extern "C" fn transfer(&mut self, from: *const i8, to: *const i8, value: u64) -> i32 {
+        let from_str = unsafe { CStr::from_ptr(from) }.to_str().unwrap().to_string();
+        let to_str = unsafe { CStr::from_ptr(to) }.to_str().unwrap().to_string();
+
+        let sender_balance = self.balance_of(from);
         if sender_balance < value {
-            return Err("Insufficient balance");
+            return -1; // Insufficient balance
         }
 
-        let receiver_balance = self.balance_of(&to);
-        let mut new_balances = self.balances.clone();
-        new_balances.insert(from, sender_balance - value);
-        new_balances.insert(to, receiver_balance + value);
+        let receiver_balance = self.balance_of(to);
+        self.balances.insert(from_str.clone(), sender_balance - value);
+        self.balances.insert(to_str.clone(), receiver_balance + value);
 
-        Ok(ERC20Token {
-            name: self.name,
-            symbol: self.symbol,
-            decimals: self.decimals,
-            total_supply: self.total_supply,
-            balances: new_balances,
-            allowed: self.allowed,
-        })
-    }
-
-
-
-    #[no_mangle]
-    pub extern "C" fn approve(self, spender: String, value: u64, owner: String) -> Result<ERC20Token, &'static str> {
-        let mut new_allowed = self.allowed.clone();
-        let allowances = new_allowed.entry(owner).or_insert(HashMap::new());
-        allowances.insert(spender, value);
-
-        Ok(ERC20Token {
-            name: self.name,
-            symbol: self.symbol,
-            decimals: self.decimals,
-            total_supply: self.total_supply,
-            balances: self.balances,
-            allowed: new_allowed,
-        })
+        0 // Success
     }
 
     #[no_mangle]
-    pub extern "C" fn allowance(self, owner: String, spender: String) -> u64 {
-        if let Some(allowances) = self.allowed.get(&owner) {
-            *allowances.get(&spender).unwrap_or(&0)
+    pub extern "C" fn approve(&mut self, owner: *const i8, spender: *const i8, value: u64) -> i32 {
+        let owner_str = unsafe { CStr::from_ptr(owner) }.to_str().unwrap().to_string();
+        let spender_str = unsafe { CStr::from_ptr(spender) }.to_str().unwrap().to_string();
+
+        let allowances = self.allowed.entry(owner_str).or_insert(HashMap::new());
+        allowances.insert(spender_str, value);
+
+        0 // Success
+    }
+
+    #[no_mangle]
+    pub extern "C" fn allowance(&self, owner: *const i8, spender: *const i8) -> u64 {
+        let owner_str = unsafe { CStr::from_ptr(owner) }.to_str().unwrap().to_string();
+        let spender_str = unsafe { CStr::from_ptr(spender) }.to_str().unwrap().to_string();
+
+        if let Some(allowances) = self.allowed.get(&owner_str) {
+            *allowances.get(&spender_str).unwrap_or(&0)
         } else {
             0
         }
     }
 
-
     #[no_mangle]
-    pub extern "C" fn transfer_from(self, from: String, to: String, value: u64, spender: String) -> Result<ERC20Token, &'static str> {
-        let allowance = self.allowance(&from, &spender);
+    pub extern "C" fn transfer_from(&mut self, spender: *const i8, from: *const i8, to: *const i8, value: u64) -> i32 {
+        let spender_str = unsafe { CStr::from_ptr(spender) }.to_str().unwrap().to_string();
+        let from_str = unsafe { CStr::from_ptr(from) }.to_str().unwrap().to_string();
+        let to_str = unsafe { CStr::from_ptr(to) }.to_str().unwrap().to_string();
+
+        let allowance = self.allowance(from, spender);
         if allowance < value {
-            return Err("Allowance exceeded");
-        }
-        
-        let result_token = self.transfer(to.clone(), value, from.clone())?;
-        let mut new_allowed = result_token.allowed.clone();
-        if let Some(allowances) = new_allowed.get_mut(&from) {
-            allowances.insert(spender, allowance - value);
+            return -1; // Allowance exceeded
         }
 
-        Ok(result_token)
+        if self.transfer(from, to, value) == -1 {
+            return -1; // Transfer failed
+        }
+
+        let allowances = self.allowed.get_mut(&from_str).unwrap();
+        allowances.insert(spender_str, allowance - value);
+
+        0 // Success
     }
 
     #[no_mangle]
-    pub extern "C" fn read_name(self, len: usize) -> String {
-        let name_bytes = self.name.as_bytes();
-        String::from_utf8_lossy(&name_bytes[..std::cmp::min(name_bytes.len(), len)]).to_string()
+    pub extern "C" fn read_name(&self, buffer: *mut u8, buffer_len: usize) -> isize {
+        self.string_to_buffer(&self.name, buffer, buffer_len)
     }
+
     #[no_mangle]
-    pub extern "C" fn read_symbol(self, len: usize) -> String {
-        let symbol_bytes = self.symbol.as_bytes();
-        String::from_utf8_lossy(&symbol_bytes[..std::cmp::min(symbol_bytes.len(), len)]).to_string()
+    pub extern "C" fn read_symbol(&self, buffer: *mut u8, buffer_len: usize) -> isize {
+        self.string_to_buffer(&self.symbol, buffer, buffer_len)
     }
+
+    fn string_to_buffer(&self, source: &str, buffer: *mut u8, buffer_len: usize) -> isize {
+        let bytes = source.as_bytes();
+        if bytes.len() > buffer_len {
+            return -1;  // Buffer too small
+        }
+        unsafe {
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), buffer, bytes.len());
+        }
+        bytes.len() as isize
+    }
+
     #[no_mangle]
-    pub extern "C" fn total_supply(self) -> u64 {
+    pub extern "C" fn total_supply(&self) -> u64 {
         self.total_supply
     }
+
     #[no_mangle]
-    pub extern "C" fn read_decimals(self) -> u8 {
+    pub extern "C" fn read_decimals(&self) -> u8 {
         self.decimals
     }
 }
