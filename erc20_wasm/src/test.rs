@@ -20,6 +20,7 @@ fn extract_string_from_wasm_memory(ptr: *mut u8, len: usize) -> String {
     String::from_utf8_lossy(slice).to_string()
 }
 
+#[generate_abi]
 impl ERC20Token {
     fn deserialize_from_memory(buffer: *const u8, len: usize) -> Result<ERC20Token, Box<dyn std::error::Error>> {
         let reader = unsafe { Cursor::new(std::slice::from_raw_parts(buffer, len)) };
